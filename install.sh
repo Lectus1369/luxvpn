@@ -135,10 +135,11 @@ setup_iran() {
     fi
     
     # Read Config Values
-    VLESS_PORT=$(grep "vless_listen_addr" /etc/luxvpn/bridge_config.txt | cut -d':' -f2)
-    TUNNEL_PORT=$(grep "tunnel_listen_addr" /etc/luxvpn/bridge_config.txt | cut -d':' -f2)
-    ADMIN_PORT=$(grep "admin_port" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2)
-    LIMIT_MODE=$(grep "limit" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r')
+    # Sanitizing input to remove \r and whitespace
+    VLESS_PORT=$(grep "vless_listen_addr" /etc/luxvpn/bridge_config.txt | cut -d':' -f2 | tr -d '\r' | tr -d ' ')
+    TUNNEL_PORT=$(grep "tunnel_listen_addr" /etc/luxvpn/bridge_config.txt | cut -d':' -f2 | tr -d '\r' | tr -d ' ')
+    ADMIN_PORT=$(grep "admin_port" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    LIMIT_MODE=$(grep "limit" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
 
     # Verify Binary
     if [ ! -f "$INSTALL_DIR/lux-bridge" ]; then
@@ -190,13 +191,13 @@ EOF
     systemctl start lux-bridge
     
     # 5. Output VLESS Config
-    PUBLIC_IP=$(curl -s https://api.ipify.org)
-    UUID=$(grep "uuid=" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r')
+    PUBLIC_IP=$(curl -s https://api.ipify.org | tr -d '\r' | tr -d ' ')
+    UUID=$(grep "uuid=" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
     
     log_success "Iran Server Setup Complete!"
     echo "========================================================"
     echo "VLESS Configuration:"
-    echo "vless://$UUID@$PUBLIC_IP:$VLESS_PORT?encryption=none&security=none&type=tcp&headerType=none#default"
+    printf "vless://%s@%s:%s?encryption=none&security=none&type=tcp&headerType=none#default\n" "$UUID" "$PUBLIC_IP" "$VLESS_PORT"
     echo "========================================================"
 }
 
