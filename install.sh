@@ -117,29 +117,29 @@ setup_iran() {
     # Assuming config is in the source root or specific folder. 
     # Using 'bridge/config.txt' based on previous structure, but check root too.
     if [ -f "$TEMP_DIR/bridge/config.txt" ]; then
-         cp "$TEMP_DIR/bridge/config.txt" /etc/luxvpn/bridge_config.txt
+         cp "$TEMP_DIR/bridge/config.txt" /etc/luxvpn/config.txt
     elif [ -f "$TEMP_DIR/config.txt" ]; then
-         cp "$TEMP_DIR/config.txt" /etc/luxvpn/bridge_config.txt
-    else
+         cp "$TEMP_DIR/config.txt" /etc/luxvpn/config.txt
+        else
          log_error "Config file for bridge not found."
          exit 1
     fi
     
     # Check/Generate UUID
-    if ! grep -q "uuid=" /etc/luxvpn/bridge_config.txt; then
+    if ! grep -q "uuid=" /etc/luxvpn/config.txt; then
         NEW_UUID=$(uuidgen)
         # Ensure newline before appending
-        echo "" >> /etc/luxvpn/bridge_config.txt
-        echo "uuid=$NEW_UUID" >> /etc/luxvpn/bridge_config.txt
+        echo "" >> /etc/luxvpn/config.txt
+        echo "uuid=$NEW_UUID" >> /etc/luxvpn/config.txt
         log_info "Generated new UUID: $NEW_UUID"
     fi
     
     # Read Config Values
     # Sanitizing input to remove \r and whitespace
-    VLESS_PORT=$(grep "vless_listen_addr" /etc/luxvpn/bridge_config.txt | cut -d':' -f2 | tr -d '\r' | tr -d ' ')
-    TUNNEL_PORT=$(grep "tunnel_listen_addr" /etc/luxvpn/bridge_config.txt | cut -d':' -f2 | tr -d '\r' | tr -d ' ')
-    ADMIN_PORT=$(grep "admin_port" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
-    LIMIT_MODE=$(grep "limit" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    VLESS_PORT=$(grep "vless_listen_addr" /etc/luxvpn/config.txt | cut -d':' -f2 | tr -d '\r' | tr -d ' ')
+    TUNNEL_PORT=$(grep "tunnel_listen_addr" /etc/luxvpn/config.txt | cut -d':' -f2 | tr -d '\r' | tr -d ' ')
+    ADMIN_PORT=$(grep "admin_port" /etc/luxvpn/config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    LIMIT_MODE=$(grep "limit" /etc/luxvpn/config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
 
     # Verify Binary
     if [ ! -f "$INSTALL_DIR/lux-bridge" ]; then
@@ -253,7 +253,7 @@ EOF
     
     # 5. Output VLESS Config
     PUBLIC_IP=$(curl -s https://api.ipify.org | tr -d '\r' | tr -d ' ')
-    UUID=$(grep "uuid=" /etc/luxvpn/bridge_config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    UUID=$(grep "uuid=" /etc/luxvpn/config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
     
     log_success "Iran Server Setup Complete!"
     echo "========================================================"
@@ -299,9 +299,9 @@ setup_foreign() {
     # 2. Config
     mkdir -p /etc/luxvpn
     if [ -f "$TEMP_DIR/exit/config.txt" ]; then
-         cp "$TEMP_DIR/exit/config.txt" /etc/luxvpn/exit_config.txt
+         cp "$TEMP_DIR/exit/config.txt" /etc/luxvpn/config.txt
     elif [ -f "$TEMP_DIR/config_exit.txt" ]; then
-         cp "$TEMP_DIR/config_exit.txt" /etc/luxvpn/exit_config.txt
+         cp "$TEMP_DIR/config_exit.txt" /etc/luxvpn/config.txt
     else
          # Fallback try to copy from bridge location if structure is odd, but ideally fail
           log_error "Config file for exit not found."
@@ -315,10 +315,10 @@ setup_foreign() {
              log_warning "Note: IP $IRAN_IP was provided but Domain is prioritized for WSS."
              # Ideally add to /etc/hosts, skipping for now
         fi
-        sed -i "s|bridge_url=.*|bridge_url=wss://$IRAN_DOMAIN/ws|g" /etc/luxvpn/exit_config.txt
+        sed -i "s|bridge_url=.*|bridge_url=wss://$IRAN_DOMAIN/ws|g" /etc/luxvpn/config.txt
     else
         log_info "Configuring connection to Iran: ws://$IRAN_IP:8081"
-        sed -i "s|bridge_url=.*|bridge_url=ws://$IRAN_IP:8081|g" /etc/luxvpn/exit_config.txt
+        sed -i "s|bridge_url=.*|bridge_url=ws://$IRAN_IP:8081|g" /etc/luxvpn/config.txt
     fi
     
     # Verify Binary
