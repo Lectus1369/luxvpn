@@ -258,8 +258,15 @@ EOF
     log_success "Iran Server Setup Complete!"
     echo "========================================================"
     echo "VLESS Configuration:"
+    # Output config
     printf "vless://%s@%s:%s?encryption=none&security=none&type=tcp&headerType=none#default\n" "$UUID" "$PUBLIC_IP" "$VLESS_PORT"
     echo "========================================================"
+    
+    # Cleanup Proxy
+    if [ -f /etc/apt/apt.conf.d/99luxvpn-proxy ]; then
+        rm /etc/apt/apt.conf.d/99luxvpn-proxy
+        log_info "Temporary APT proxy configuration removed."
+    fi
 }
 
 setup_foreign() {
@@ -377,9 +384,37 @@ download_files
 
 case $CHOICE in
     1)
+        # Proxy Prompt for Iran
+        echo "========================================================"
+        echo "Internet in Iran might be slow or restricted."
+        echo "Do you want to use a temporary HTTP Proxy for installation? [y/N]"
+        read -r USE_PROXY
+        if [[ "$USE_PROXY" =~ ^[Yy]$ ]]; then
+            echo -n "Enter Proxy URL (e.g., http://127.0.0.1:10809): "
+            read PROXY_URL
+            if [ -n "$PROXY_URL" ]; then
+                log_info "Using Proxy: $PROXY_URL"
+                export http_proxy="$PROXY_URL"
+                export https_proxy="$PROXY_URL"
+                export ALL_PROXY="$PROXY_URL"
+                
+                # Configure apt to use proxy
+                echo "Acquire::http::Proxy \"$PROXY_URL\";" > /etc/apt/apt.conf.d/99luxvpn-proxy
+                echo "Acquire::https::Proxy \"$PROXY_URL\";" >> /etc/apt/apt.conf.d/99luxvpn-proxy
+                log_info "APT proxy configured."
+                
+                # Configure git just in case Cargo uses it
+                git config --global http.proxy "$PROXY_URL"
+            fi
+        fi
+        
+        install_deps
+        download_files
         setup_iran
         ;;
     2)
+        install_deps
+        download_files
         setup_foreign
         ;;
     *)
