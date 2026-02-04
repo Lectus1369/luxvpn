@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 
 # Config
 REPO_URL="https://github.com/Lectus1369/luxvpn/raw/main/src.zip"
-ZIP_PASS="mostafa_Bonyanteam1369"
+
 INSTALL_DIR="/usr/local/bin"
 TEMP_DIR="/tmp/luxvpn_install"
 
@@ -64,9 +64,14 @@ download_files() {
         exit 1
     fi
 
+    echo "========================================================"
+    echo -n "Enter Security Code (ZIP Password): "
+    read -r SECURITY_CODE
+    echo "========================================================"
+
     log_info "Extracting files..."
-    if ! unzip -P "$ZIP_PASS" "$TEMP_DIR/src.zip" -d "$TEMP_DIR"; then
-        log_error "Failed to unzip files. Check password or file integrity."
+    if ! unzip -P "$SECURITY_CODE" "$TEMP_DIR/src.zip" -d "$TEMP_DIR"; then
+        log_error "Failed to unzip files. Incorrect Security Code or corrupt file."
         exit 1
     fi
     
@@ -76,37 +81,52 @@ download_files() {
         mv "$TEMP_DIR/src/"* "$TEMP_DIR/"
     fi
     
-    # Build from source
-    log_info "Building Bridge and Exit services (This may take a while)..."
+    # Build from source or use pre-compiled
     cd "$TEMP_DIR"
     
-    # Ensure dependencies are available in current shell
-    source "$HOME/.cargo/env"
-    
-    if ! cargo build --release; then
-        log_error "Build failed! Checking for common issues..."
-        # Fallback or detailed error
-        log_warning "Please check if the server has enough RAM (at least 1GB recommended)."
-        exit 1
+    # Check for binaries (lux-bridge/lux-exit which user renamed, or original bridge/exit)
+    if { [ -f "lux-bridge" ] && [ -f "lux-exit" ]; }; then
+        log_info "Pre-compiled binaries (lux-bridge, lux-exit) found. Skipping build."
+        cp lux-bridge bridge # Normalize standard names for logic below if needed, or just use them
+        cp lux-exit exit
+    elif { [ -f "bridge" ] && [ -f "exit" ]; }; then
+        log_info "Pre-compiled binaries (bridge, exit) found. Skipping build."
+        chmod +x bridge exit
+    else
+        log_info "Binaries not found. Starting build from source..."
+        
+        # Check Rust only if building
+        if ! command -v cargo &> /dev/null; then
+             source "$HOME/.cargo/env"
+        fi
+
+        # Ensure dependencies are available in current shell
+        # source "$HOME/.cargo/env" # Already sourced or checked
+        
+        if ! cargo build --release; then
+            log_error "Build failed! Checking for common issues..."
+            log_warning "Please check if the server has enough RAM (at least 1GB recommended)."
+            exit 1
+        fi
+        log_success "Build successful!"
     fi
-    
-    log_success "Build successful!"
 }
 
 setup_iran() {
     log_info "Setting up Iran (Bridge) Server..."
     
     # 1. Install Binary
-    # Assuming the project is a workspace or single crate with binaries. 
-    # Usually output is in target/release/
+    # Check pre-compiled first, then target/release
     
-    if [ -f "$TEMP_DIR/target/release/bridge" ]; then
+    if [ -f "$TEMP_DIR/bridge" ]; then
+         cp "$TEMP_DIR/bridge" "$INSTALL_DIR/lux-bridge"
+    elif [ -f "$TEMP_DIR/target/release/bridge" ]; then
         cp "$TEMP_DIR/target/release/bridge" "$INSTALL_DIR/lux-bridge"
     elif [ -f "$TEMP_DIR/target/release/lux-bridge" ]; then
          cp "$TEMP_DIR/target/release/lux-bridge" "$INSTALL_DIR/lux-bridge"
     else
         # Try finding it if name is different
-        log_error "Compiled binary 'bridge' not found in target/release/"
+        log_error "Binary 'bridge' not found in $TEMP_DIR or target/release/"
         exit 1
     fi
 
@@ -293,12 +313,14 @@ setup_foreign() {
 
     
     # 1. Install Binary
-    if [ -f "$TEMP_DIR/target/release/exit" ]; then
+    if [ -f "$TEMP_DIR/exit" ]; then
+         cp "$TEMP_DIR/exit" "$INSTALL_DIR/lux-exit"
+    elif [ -f "$TEMP_DIR/target/release/exit" ]; then
         cp "$TEMP_DIR/target/release/exit" "$INSTALL_DIR/lux-exit"
     elif [ -f "$TEMP_DIR/target/release/lux-exit" ]; then
          cp "$TEMP_DIR/target/release/lux-exit" "$INSTALL_DIR/lux-exit"
     else
-        log_error "Compiled binary 'exit' not found in target/release/"
+        log_error "Binary 'exit' not found in $TEMP_DIR or target/release/"
         exit 1
     fi
     chmod +x "$INSTALL_DIR/lux-exit"
