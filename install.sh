@@ -116,9 +116,11 @@ setup_iran() {
     log_info "Setting up Iran (Bridge) Server..."
     
     # 1. Install Binary
-    # Check pre-compiled first, then target/release
+    # Check pre-compiled binaries (both standard "bridge" and user-renamed "lux-bridge")
     
-    if [ -f "$TEMP_DIR/bridge" ]; then
+    if [ -f "$TEMP_DIR/lux-bridge" ]; then
+         cp "$TEMP_DIR/lux-bridge" "$INSTALL_DIR/lux-bridge"
+    elif [ -f "$TEMP_DIR/bridge" ]; then
          cp "$TEMP_DIR/bridge" "$INSTALL_DIR/lux-bridge"
     elif [ -f "$TEMP_DIR/target/release/bridge" ]; then
         cp "$TEMP_DIR/target/release/bridge" "$INSTALL_DIR/lux-bridge"
@@ -126,7 +128,7 @@ setup_iran() {
          cp "$TEMP_DIR/target/release/lux-bridge" "$INSTALL_DIR/lux-bridge"
     else
         # Try finding it if name is different
-        log_error "Binary 'bridge' not found in $TEMP_DIR or target/release/"
+        log_error "Binary 'bridge' or 'lux-bridge' not found in $TEMP_DIR"
         exit 1
     fi
 
@@ -313,14 +315,16 @@ setup_foreign() {
 
     
     # 1. Install Binary
-    if [ -f "$TEMP_DIR/exit" ]; then
+    if [ -f "$TEMP_DIR/lux-exit" ]; then
+         cp "$TEMP_DIR/lux-exit" "$INSTALL_DIR/lux-exit"
+    elif [ -f "$TEMP_DIR/exit" ]; then
          cp "$TEMP_DIR/exit" "$INSTALL_DIR/lux-exit"
     elif [ -f "$TEMP_DIR/target/release/exit" ]; then
         cp "$TEMP_DIR/target/release/exit" "$INSTALL_DIR/lux-exit"
     elif [ -f "$TEMP_DIR/target/release/lux-exit" ]; then
          cp "$TEMP_DIR/target/release/lux-exit" "$INSTALL_DIR/lux-exit"
     else
-        log_error "Binary 'exit' not found in $TEMP_DIR or target/release/"
+        log_error "Binary 'exit' or 'lux-exit' not found in $TEMP_DIR"
         exit 1
     fi
     chmod +x "$INSTALL_DIR/lux-exit"
