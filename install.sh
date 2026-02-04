@@ -161,6 +161,67 @@ setup_iran() {
     ufw allow "$VLESS_PORT"/tcp
     ufw allow "$TUNNEL_PORT"/tcp
     
+    # SSL Setup
+    echo "========================================================"
+    echo "Do you want to enable SSL (WSS) using Certbot & Nginx? [y/N]"
+    read -r ENABLE_SSL
+    if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
+        log_info "Installing Nginx and Certbot..."
+        apt-get install -y nginx certbot python3-certbot-nginx
+        
+        echo -n "Enter the Domain for this server (Iran) (e.g., bridge.example.com): "
+        read BRIDGE_DOMAIN
+        
+        if [ -z "$BRIDGE_DOMAIN" ]; then
+             log_error "Domain is required for SSL."
+             exit 1
+        fi
+        
+        # Open ports for Certbot
+        ufw allow 80/tcp
+        ufw allow 443/tcp
+        
+        # Stop Nginx to avoid conflicts during cert generation if using standalone (but we use --nginx)
+        systemctl stop nginx
+        
+        # Run Certbot
+        log_info "Obtaining SSL Certificate..."
+        certbot certonly --standalone -d "$BRIDGE_DOMAIN" --non-interactive --agree-tos -m admin@"$BRIDGE_DOMAIN"
+        
+        # Write Nginx Config
+        cat <<NGINX > /etc/nginx/sites-available/luxvpn
+server {
+    listen 80;
+    server_name $BRIDGE_DOMAIN;
+    return 301 https://\$host\$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name $BRIDGE_DOMAIN;
+
+    ssl_certificate /etc/letsencrypt/live/$BRIDGE_DOMAIN/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$BRIDGE_DOMAIN/privkey.pem;
+
+    location /ws {
+        proxy_pass http://127.0.0.1:$TUNNEL_PORT;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "Upgrade";
+        proxy_set_header Host \$host;
+    }
+}
+NGINX
+
+        ln -sf /etc/nginx/sites-available/luxvpn /etc/nginx/sites-enabled/
+        rm -f /etc/nginx/sites-enabled/default
+        
+        systemctl restart nginx
+        log_success "SSL Configured with Nginx!"
+    else
+        log_info "Skipping SSL setup."
+    fi
+
     if [[ "$LIMIT_MODE" != "true" ]]; then
         ufw allow "$ADMIN_PORT"/tcp
         log_info "Admin port $ADMIN_PORT allowed."
@@ -203,6 +264,26 @@ EOF
 
 setup_foreign() {
     log_info "Setting up Foreign (Exit) Server..."
+
+    # Prompts first (Before installation steps)
+    echo "========================================================"
+    echo "To connect via WSS (Secure), enter the Iran Domain."
+    echo "To connect via WS (Insecure/Test), leave Domain empty and enter IP next."
+    echo -n "Enter the Iran Server Domain (e.g., bridge.example.com): "
+    read IRAN_DOMAIN
+    
+    echo -n "Enter Iran Server IP (Required if Domain is empty): "
+    read IRAN_IP
+    echo "========================================================"
+
+    if [ -z "$IRAN_DOMAIN" ] && [ -z "$IRAN_IP" ]; then
+        log_error "You must provide either a Domain or an IP."
+        exit 1
+    fi
+     
+    # ... (Binary Install) ...
+
+
     
     # 1. Install Binary
     if [ -f "$TEMP_DIR/target/release/exit" ]; then
@@ -227,26 +308,18 @@ setup_foreign() {
           exit 1
     fi
     
-    echo "========================================================"
-    log_warning "ACTION REQUIRED: A-Record Setup"
-    echo "Please go to your DNS provider (e.g., Cloudflare) and create an 'A' record."
-    echo "Name: your-subdomain (e.g., 'fin')"
-    echo "Content/IP: <IP_ADDRESS_OF_IRAN_SERVER>"
-    echo "Proxy status: DNS Only (Disabled)"
-    echo "========================================================"
-    echo ""
-    echo -n "Enter the Domain you set (e.g., fin.hairdware.com): "
-    read IRAN_DOMAIN
-    
-    if [ -z "$IRAN_DOMAIN" ]; then
-        log_error "Domain cannot be empty."
-        exit 1
+    # Update config to use WSS or WS
+    if [ -n "$IRAN_DOMAIN" ]; then
+        log_info "Configuring connection to Iran: wss://$IRAN_DOMAIN/ws"
+        if [ -n "$IRAN_IP" ]; then
+             log_warning "Note: IP $IRAN_IP was provided but Domain is prioritized for WSS."
+             # Ideally add to /etc/hosts, skipping for now
+        fi
+        sed -i "s|bridge_url=.*|bridge_url=wss://$IRAN_DOMAIN/ws|g" /etc/luxvpn/exit_config.txt
+    else
+        log_info "Configuring connection to Iran: ws://$IRAN_IP:8081"
+        sed -i "s|bridge_url=.*|bridge_url=ws://$IRAN_IP:8081|g" /etc/luxvpn/exit_config.txt
     fi
-    
-    log_info "Configuring connection to: ws://$IRAN_DOMAIN:8081"
-    
-    # Update config
-    sed -i "s|bridge_url=.*|bridge_url=ws://$IRAN_DOMAIN:8081|g" /etc/luxvpn/exit_config.txt
     
     # Verify Binary
     if [ ! -f "$INSTALL_DIR/lux-exit" ]; then
