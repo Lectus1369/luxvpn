@@ -142,10 +142,59 @@ setup_iran() {
          cp "$TEMP_DIR/bridge/config.txt" /etc/luxvpn/config.txt
     elif [ -f "$TEMP_DIR/config.txt" ]; then
          cp "$TEMP_DIR/config.txt" /etc/luxvpn/config.txt
-        else
+    else
          log_error "Config file for bridge not found."
          exit 1
     fi
+
+    # --- User Prompts for Configuration ---
+    echo "========================================================"
+    echo "Bridge Configuration"
+    echo "Press Enter to keep defaults."
+    
+    # 1. Admin Port
+    DEFAULT_ADMIN_PORT=$(grep "admin_port" /etc/luxvpn/config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    [ -z "$DEFAULT_ADMIN_PORT" ] && DEFAULT_ADMIN_PORT="9900"
+    echo -n "Enter Admin Port [Default: $DEFAULT_ADMIN_PORT]: "
+    read INPUT_ADMIN_PORT
+    [ -z "$INPUT_ADMIN_PORT" ] && INPUT_ADMIN_PORT="$DEFAULT_ADMIN_PORT"
+    sed -i "s|admin_port=.*|admin_port=$INPUT_ADMIN_PORT|g" /etc/luxvpn/config.txt
+    
+    # 2. VLESS Port
+    # Extract current port from addr string (e.g. 0.0.0.0:10086 -> 10086)
+    CURRENT_VLESS_VAL=$(grep "vless_listen_addr" /etc/luxvpn/config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    DEFAULT_VLESS_PORT=$(echo "$CURRENT_VLESS_VAL" | cut -d':' -f2)
+    [ -z "$DEFAULT_VLESS_PORT" ] && DEFAULT_VLESS_PORT="10086"
+    
+    echo -n "Enter VLESS Port (Client Connect) [Default: $DEFAULT_VLESS_PORT]: "
+    read INPUT_VLESS_PORT
+    [ -z "$INPUT_VLESS_PORT" ] && INPUT_VLESS_PORT="$DEFAULT_VLESS_PORT"
+    # Update full address string
+    sed -i "s|vless_listen_addr=.*|vless_listen_addr=0.0.0.0:$INPUT_VLESS_PORT|g" /etc/luxvpn/config.txt
+
+    # 3. Tunnel Listening Port
+    CURRENT_TUNNEL_VAL=$(grep "tunnel_listen_addr" /etc/luxvpn/config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    DEFAULT_TUNNEL_PORT=$(echo "$CURRENT_TUNNEL_VAL" | cut -d':' -f2)
+    [ -z "$DEFAULT_TUNNEL_PORT" ] && DEFAULT_TUNNEL_PORT="8081"
+    
+    echo -n "Enter Tunnel Port (Exit Connect) [Default: $DEFAULT_TUNNEL_PORT]: "
+    read INPUT_TUNNEL_PORT
+    [ -z "$INPUT_TUNNEL_PORT" ] && INPUT_TUNNEL_PORT="$DEFAULT_TUNNEL_PORT"
+    sed -i "s|tunnel_listen_addr=.*|tunnel_listen_addr=0.0.0.0:$INPUT_TUNNEL_PORT|g" /etc/luxvpn/config.txt
+    
+    # 4. Limit Mode
+    DEFAULT_LIMIT=$(grep "limit" /etc/luxvpn/config.txt | cut -d'=' -f2 | tr -d '\r' | tr -d ' ')
+    [ -z "$DEFAULT_LIMIT" ] && DEFAULT_LIMIT="false"
+    echo -n "Enable Limit Mode (Block Admin from outside)? [true/false] [Default: $DEFAULT_LIMIT]: "
+    read INPUT_LIMIT
+    [ -z "$INPUT_LIMIT" ] && INPUT_LIMIT="$DEFAULT_LIMIT"
+    # If key exists update, else append
+    if grep -q "limit=" /etc/luxvpn/config.txt; then
+        sed -i "s|limit=.*|limit=$INPUT_LIMIT|g" /etc/luxvpn/config.txt
+    else
+        echo "limit=$INPUT_LIMIT" >> /etc/luxvpn/config.txt
+    fi
+
     
     # Check/Generate UUID
     if ! grep -q "uuid=" /etc/luxvpn/config.txt; then
@@ -225,7 +274,7 @@ server {
     ssl_certificate /etc/letsencrypt/live/$BRIDGE_DOMAIN/fullchain.pem;
     ssl_certificate_key /etc/letsencrypt/live/$BRIDGE_DOMAIN/privkey.pem;
 
-    location /ws {
+    location /chat {
         proxy_pass http://127.0.0.1:$TUNNEL_PORT;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
@@ -288,7 +337,7 @@ EOF
     # Output config
     if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
         # WSS Config
-        printf "vless://%s@%s:443?encryption=none&security=tls&type=ws&host=%s&path=%%2Fws#default\n" "$UUID" "$BRIDGE_DOMAIN" "$BRIDGE_DOMAIN"
+        printf "vless://%s@%s:443?encryption=none&security=tls&type=ws&host=%s&path=%%2Fchat#default\n" "$UUID" "$BRIDGE_DOMAIN" "$BRIDGE_DOMAIN"
     else
         # TCP Config
         printf "vless://%s@%s:%s?encryption=none&security=none&type=tcp&headerType=none#default\n" "$UUID" "$PUBLIC_IP" "$VLESS_PORT"
@@ -354,12 +403,12 @@ setup_foreign() {
     
     # Update config to use WSS or WS
     if [ -n "$IRAN_DOMAIN" ]; then
-        log_info "Configuring connection to Iran: wss://$IRAN_DOMAIN/ws"
+        log_info "Configuring connection to Iran: wss://$IRAN_DOMAIN/chat"
         if [ -n "$IRAN_IP" ]; then
              log_warning "Note: IP $IRAN_IP was provided but Domain is prioritized for WSS."
              # Ideally add to /etc/hosts, skipping for now
         fi
-        sed -i "s|bridge_url=.*|bridge_url=wss://$IRAN_DOMAIN/ws|g" /etc/luxvpn/config.txt
+        sed -i "s|bridge_url=.*|bridge_url=wss://$IRAN_DOMAIN/chat|g" /etc/luxvpn/config.txt
     else
         log_info "Configuring connection to Iran: ws://$IRAN_IP:8081"
         sed -i "s|bridge_url=.*|bridge_url=ws://$IRAN_IP:8081|g" /etc/luxvpn/config.txt
