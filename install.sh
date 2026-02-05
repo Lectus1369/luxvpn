@@ -228,9 +228,14 @@ server {
     location /ws {
         proxy_pass http://127.0.0.1:$TUNNEL_PORT;
         proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "Upgrade";
-        proxy_set_header Host \$host;
+        proxy_set_header Host $host;
+        
+        # Increase timeouts for WebSocket
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_connect_timeout 3600s;
     }
 }
 NGINX
@@ -281,7 +286,13 @@ EOF
     echo "========================================================"
     echo "VLESS Configuration:"
     # Output config
-    printf "vless://%s@%s:%s?encryption=none&security=none&type=tcp&headerType=none#default\n" "$UUID" "$PUBLIC_IP" "$VLESS_PORT"
+    if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
+        # WSS Config
+        printf "vless://%s@%s:443?encryption=none&security=tls&type=ws&host=%s&path=%%2Fws#default\n" "$UUID" "$BRIDGE_DOMAIN" "$BRIDGE_DOMAIN"
+    else
+        # TCP Config
+        printf "vless://%s@%s:%s?encryption=none&security=none&type=tcp&headerType=none#default\n" "$UUID" "$PUBLIC_IP" "$VLESS_PORT"
+    fi
     echo "========================================================"
     
     # Cleanup Proxy
